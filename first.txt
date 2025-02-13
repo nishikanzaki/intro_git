@@ -6,3 +6,5 @@ git status
 cd ~/Desktop
 cd intro_git
 ls -a
+git add
+git push
