@@ -315,6 +315,7 @@ cat(sprintf("p値: %.4f", round(t_test_result$p.value, 4)))
 library(wbstats)
 library(ggplot2)
 library(dplyr)
+library(readr)
 
 # 日本のGDPデータを世界銀行から取得
 # wb_data()関数を使用して、世界銀行のデータにアクセスします。
@@ -323,48 +324,34 @@ library(dplyr)
 # return_wide = FALSE: データを「tidy」（整形された）形式で取得します。
 # これはggplot2でのプロットに適しています。
 
-j_gdp <- wb_data(
-  country = "JP",
-  indicator = "NY.GDP.MKTP.CD.",
-  return_wide = FALSE
-)
 
-# j_gdpデータフレームのvalue列をGDPにリネーム
+# j_gdp <- wb_data(
+#   country   = "JPN",
+#   indicator = "NY.GDP.MKTP.CD",
+#   return_wide = FALSE
+# )
+
+j_gdp <- read_csv("japan_gdp.csv") %>%
+  filter(Year >= 1960)
+
+
+library(ggplot2)
+library(dplyr)
+
+# GDP を兆ドルに変換
 j_gdp <- j_gdp %>%
-  rename(GDP = value)
+  mutate(GDP_trillion = GDP / 1e6)
 
-# 年を昇順にソート（wb_dataはデフォルトでソートされているため不要な
-# 場合が多いですが、念のため）
-# Rの**order()関数は、引数として与えられたベクトル
-# （この場合はj_gdp$date）の値を昇順に並べ替えた際のインデックス（行番号）
-# **を返します。
-# 降順にしたい場合は、order(-j_gdp$date)のようにマイナス記号を付けるか、
-# order(j_gdp$date, decreasing = TRUE)と指定します。
-
-j_gdp <- j_gdp[order(j_gdp$date), ]
-
-# 日本のGDPをプロット
-# 凡例あり
-ggplot(j_gdp, aes(x = date, y = GDP)) +
-  geom_line(aes(color = "GDP"), linewidth = 1.5) +
+# プロット
+ggplot(j_gdp, aes(x = Year, y = GDP_trillion)) +
+  geom_line(color = "steelblue", size = 1) +
   labs(
-    title = "日本のGDP推移",
-    x = "年",
-    y = "GDP (米ドル)",
-    color = ""           # ここで凡例タイトルを非表示に設定
-  ) +
-  scale_color_manual(values = c("GDP" = "darkblue"))+
-  theme_minimal()
-
-# 凡例なし
-ggplot(j_gdp, aes(x = date, y = GDP)) +
-  geom_line(color = "darkblue", linewidth = 1.5) +
-  labs(
-    title = "日本のGDP推移",
-    x = "年",
-    y = "GDP (米ドル)",
+    title = "Japan GDP (World Bank, current USD, Trillion USD)",
+    x = "Year",
+    y = "GDP (Trillion USD)"
   ) +
   theme_minimal()
+
 
 
 
@@ -424,11 +411,17 @@ ggplot(wine_filtered, aes(x = date, y = wineind)) +
   ) +
   theme_minimal()
 
+autoplot(window(wineind, start = 1991))+
+  geom_line(color = "blue", size = 1.5) +  
+  ggtitle("AUS ワインの月次販売量（1991年以降）") +
+  xlab("年") +
+  ylab("ワイン販売量") +
+  theme_minimal()
+
 
 # 時系列データの成分分解 -------------------------------------------------------------
 
 # 必要なパッケージを読み込みます
-library(tsibble)
 library(fpp2)      # AirPassengers データセットを含むパッケージ
 library(ggplot2)
 library(lubridate)
@@ -441,9 +434,11 @@ airpassengers_df <- tibble(
   date = seq(from = ymd("1949-01-01"), by = "month", length.out = length(AirPassengers)),
   passengers = as.vector(AirPassengers) # 値をベクトルに変換して代入
 )
+head(airpassengers_df)
 
 # tibbleをtsibbleオブジェクトに変換します
 airpassengers_ts <- as_tsibble(airpassengers_df, index = date)
+head(airpassengers_ts)
 
 # 2. データのプロット
 # ggplot2を使用してプロットします
@@ -456,13 +451,19 @@ ggplot(airpassengers_ts, aes(x = date, y = passengers)) +
   ) +
   theme_minimal()
 
+autoplot(AirPassengers)
+
+class(AirPassengers)
+class(airpassengers_df)
+class(airpassengers_ts)
 
 # STL分解 -------------------------------------------------------------------
 
 # パッケージの読み込み
-# feastsは、**特徴量（features）と時系列（time series）**の組み合わせに
-# 由来する名前で、時系列データから分析に役立つ特徴量を抽出し、
-# 可視化するための関数を多数提供しています。
+# feastsは、"Feature Extraction and STatistical Summary"
+# 時系列データの特徴量抽出（feature extraction）や統計要約（statistical summary）
+# に特化しています
+# 時系列データから分析に役立つ特徴量を抽出し可視化するための関数を提供しています。
 library(feasts)
 library(fpp2)      # AirPassengers データセットを含む
 library(tsibble)   # 時系列データを扱うための形式
@@ -493,6 +494,8 @@ autoplot(ap_decomp, colour = "darkblue", size = 1) +
 # を可視化する役割を持っています。
 # 棒グラフの高さ: これは、**季節性（Seasonal）**成分のY軸の範囲に対応
 # しています。
+
+
 # 各パネルのY軸: トレンド、季節性、残差の各パネルは、それぞれ異なる
 # スケールで描画されますが、棒グラフと同じ高さで比較することができます。
 # この棒グラフがあることで、データの変動全体（Observed）のうち、
@@ -500,3 +503,308 @@ autoplot(ap_decomp, colour = "darkblue", size = 1) +
 # どの程度が残差によるものかを相対的に比較することが容易になります。
 # 例えば、この棒グラフがトレンドや残差のパネルの高さに対して非常に大
 # きい場合、そのデータは強い季節性を持っていると判断できます。
+
+
+# MSTL分解 ------------------------------------------------------------------
+
+# 必要なパッケージを読み込みます
+library(feasts)  # 時系列データの特徴量（features）を抽出し、
+                 # 分解・可視化するための現代的なパッケージです。
+library(tsibble) # データの形式を、時系列分析に最適な**tsibble**という
+                 #データフレーム形式に変換・管理するためのパッケージです。
+library(forecast) # 多くの時系列予測・分析手法を提供する伝統的なパッケージです。
+                  # 今回のコードでは**msts()関数とmstl()**関数がこのパッケージに含まれています。
+library(dplyr)
+
+# データの準備
+# 既存の`airpassengers_ts` tsibbleオブジェクトを使用
+
+# MSTL分解の実行と結果の取得
+# 1. 複数の周期を持つ時系列オブジェクト（msts）を作成
+# このステップでは、元の時系列データairpassengers_ts$passengersを、
+# 複数の季節性を持つ時系列オブジェクト（msts）に変換しています。
+# seasonal.periods = c(6, 12)は、このデータに周期6（半年）と周期12
+#（1年）の2つの季節性が含まれていることを明示的に指定しています。
+# mstsオブジェクトは、この複数の季節性情報をmstl()関数に渡すために
+# 不可欠な形式です。
+airpassengers_msts <- msts(
+  airpassengers_ts$passengers, 
+  seasonal.periods = c(6, 12)
+)
+
+# 2. mstsオブジェクトをmstl()に渡す
+# mstsオブジェクトであるairpassengers_mstsを**mstl()**関数に渡すこと
+# で、**MSTL分解（Multiple Seasonal-Trend decomposition using Loess）
+# **を実行しています。
+ap_mstl <- mstl(airpassengers_msts)
+
+# 3. 結果のプロット
+# 最後に、feastsパッケージの**autoplot()**関数を使って、分解結果を
+# 視覚化しています。autoplot()は、mstl()の出力のような特定のオブジェ
+# クトの種類を自動的に認識し、最も適切なグラフを生成してくれます。
+# この場合、トレンド、季節性（6ヶ月）、季節性（12ヶ月）、残差、そして元のデータ
+# が、見やすく配置された複数のパネルグラフとして描画されます。
+autoplot(ap_mstl)
+
+
+# コレログラム分析 ----------------------------------------------------------------
+
+# 必要なパッケージを読み込みます
+library(forecast)
+library(ggplot2)
+
+# 2.15のコードで作成された 'airpassengers_ts' オブジェクトを使用
+
+# プロットを2行1列に配置
+# mar 引数で下、左、上、右の余白を調整
+# デフォルト: c(5.1, 4.1, 4.1, 2.1)
+# 変更後: 上側の余白を広げ、タイトルが表示されるようにする
+par(mfrow = c(2, 1), mar = c(4, 4, 3, 2) + 0.1)
+
+# 自己相関 (ACF) のプロット
+# `main`引数でタイトルを明示的に指定
+acf(airpassengers_ts$passengers, main = "Autocorrelation Function (ACF)", 
+    xlab = "Lag", ylab = "ACF", lag.max = 40)
+
+# 偏自己相関 (PACF) のプロット
+# `main`引数でタイトルを明示的に指定
+pacf(airpassengers_ts$passengers, main = "Partial Autocorrelation Function (PACF)", 
+     xlab = "Lag", ylab = "PACF", lag.max = 40)
+
+# プロット設定をリセット
+# これを忘れると、その後のプロットもこのレイアウトになります
+par(mfrow = c(1, 1), mar = c(5.1, 4.1, 4.1, 2.1))
+
+ggtsdisplay(airpassengers_df$passengers, main = "airpassengers")
+
+
+# 定常性と非定常性 ----------------------------------------------------------------
+
+# 必要なパッケージ
+# install.packages("urca")
+# install.packages("tseries")
+
+library(urca)
+library(tseries)
+
+# ADF 検定を行う関数（修正版）####
+adf_test <- function(series, type = "drift") {
+  # type: "none" (定数なし), "drift" (定数あり), "trend" (定数+トレンド)
+  
+  result <- ur.df(na.omit(series), type = type, selectlags = "AIC")
+  
+  cat("=== ADF 検定結果 ===\n")
+  cat(" 検定統計量 (ADF Statistic):", result@teststat[1], "\n")
+  
+  crit <- result@cval[1, ]
+  cat(" 臨界値 (1%):", crit["1pct"], 
+      " 5%:", crit["5pct"], 
+      " 10%:", crit["10pct"], "\n")
+  
+  if (result@teststat[1] < crit["5pct"]) {
+    cat(" 帰無仮説を棄却 → 定常\n\n")
+  } else {
+    cat(" 帰無仮説が棄却できず → 非定常かもしれない\n\n")
+  }
+}
+
+adf_test(AirPassengers, type = "drift")  # 定数＋トレンド
+# 呼び出し時に "trend" を指定すれば良い
+
+# 通常のADF検定
+summary(ur.df(AirPassengers, type = "drift"))
+
+# typeの選択ができないので、使わない方がよい
+adf.test(AirPassengers)
+
+
+# KPSS 検定を行う関数####
+kpss_test <- function(series, null = "Level") {
+  # null: "Level" (定数のみ), "Trend" (定数+トレンド)
+  
+  result <- kpss.test(na.omit(series), null = null)
+  
+  cat("=== KPSS 検定結果 ===\n")
+  cat(" 検定統計量 (KPSS Statistic):", result$statistic, "\n")
+  cat(" p 値 (p-value):", result$p.value, "\n")
+  
+  if (result$p.value < 0.05) {
+    cat(" 帰無仮説を棄却 → 非定常\n\n")
+  } else {
+    cat(" 帰無仮説が棄却できず → 定常かもしれない\n\n")
+  }
+}
+
+# 例: AirPassengers に適用
+kpss_test(AirPassengers, null = "Level")  # 定数+トレンド
+
+# 通常のKPSS検定(帰無仮説：単位根なし）
+summary(ur.kpss(AirPassengers, type = "mu"))
+kpss.test(AirPassengers, null = "Level")
+
+
+
+# 定常化の手法 ------------------------------------------------------------------
+
+# トレンド調整の手法 ####
+
+# 一階差分
+df_lag1 <- diff(airpassengers_df$passengers)
+
+# プロット
+plot(df_lag1,
+     type = "l",
+     main = "一階差分を取った時系列データ",
+     xlab = "時点",
+     ylab = "差分値")
+
+
+# 時間 t（1,2,3,...のインデックス）
+t <- seq_along(airpassengers_df$passengers)
+
+# 線形回帰モデルの学習
+model <- lm(airpassengers_df$passengers ~ t)
+
+# トレンドの予測
+trend <- predict(model)
+
+# トレンド除去
+df_detrended <- airpassengers_df$passengers - trend
+
+# プロット
+plot(df_detrended,
+     type = "l",
+     main = "線形回帰モデルでトレンド除去した時系列データ",
+     xlab = "時点",
+     ylab = "トレンド除去後の値")
+
+
+# 季節調整の手法 ####
+
+class(AirPassengers)
+df_des <- diff(AirPassengers, lag = 12)
+plot(df_des,
+     main = "季節差分を取った時系列データ")
+
+
+# 分散の安定化の手法 ####
+
+library(forecast)
+
+# 対数変換
+df_log <- log(AirPassengers)
+
+# Box-Cox 変換（λを自動推定）
+# Python → 尤度最大化法（デフォルト）
+# R → Guerrero法（分散安定化）（デフォルト）
+# Rでも method="loglik" を指定すれば、Pythonに近い λ が出るはずです。
+lambda_param <- BoxCox.lambda(AirPassengers, method = "loglik")
+df_bc <- BoxCox(AirPassengers, lambda_param)
+
+# プロット
+par(mfrow = c(2, 1))   # 2行1列に並べる
+
+plot(df_log,
+     type = "l",
+     main = "対数変換後の時系列データ",
+     xlab = "時間", ylab = "値")
+
+plot(df_bc,
+     type = "l",
+     main = "Box-Cox 変換後の時系列データ",
+     xlab = "時間", ylab = "値")
+mtext(paste("Box-Cox 変換のλパラメータ:", round(lambda_param, 3)),
+      side = 3, line = -1.5, adj = 0, cex = 0.9)
+
+par(mfrow = c(1, 1))   # レイアウトを戻す
+
+
+
+# 実践的な応用例 -----------------------------------------------------------------
+
+# ==============================
+# 必要なライブラリ
+# ==============================
+library(urca)     # ADF 検定
+library(tseries)  # KPSS 検定
+
+# ==============================
+# ADF 検定ラッパー（判定コメント付き）
+# ==============================
+adf_test <- function(series, type = "drift") {
+  adf <- ur.df(na.omit(series), type = type, selectlags = "AIC")
+  
+  # 検定統計量（ADF Statistic）
+  stat <- adf@teststat[1]            
+  # 5%臨界値
+  crit <- adf@cval[1, "5pct"]       
+  
+  cat("=== ADF 検定結果 ===\n")
+  cat("検定統計量 (ADF Statistic):", round(stat, 4), "\n")
+  
+  # 判定
+  if(stat < crit) {
+    cat("帰無仮説が棄却 → 定常の可能性あり\n")
+  } else {
+    cat("帰無仮説が棄却できず → 非定常かもしれない\n")
+  }
+}
+
+# ==============================
+# KPSS 検定ラッパー（判定コメント付き）
+# ==============================
+kpss_test <- function(series, null = "Level") {
+  kpss <- kpss.test(na.omit(series), null = null)
+  
+  cat("\n=== KPSS 検定結果 ===\n")
+  cat("検定統計量 (KPSS Statistic):", round(kpss$statistic, 4), "\n")
+  cat("p 値 (p-value):", round(kpss$p.value, 4), "\n")
+  
+  if(kpss$p.value < 0.05) {
+    cat("帰無仮説を棄却 → 非定常\n")
+  } else {
+    cat("帰無仮説を棄却できず → 定常かもしれない\n")
+  }
+}
+
+# ==============================
+# 可視化 + 検定まとめ関数
+# ==============================
+plot_and_stationarity_tests <- function(
+    series,           # 時系列データ
+    title,            # グラフタイトル
+    adf_type = "drift",  # ADF 検定タイプ ("none", "drift", "trend")
+    kpss_null = "Level"  # KPSS 帰無仮説 ("Level", "Trend")
+) {
+  par(mfrow = c(3, 1))
+  
+  # (a) 時系列プロット
+  plot(series, type = "l", main = title, ylab = "値", xlab = "時間")
+  
+  # (b) ACF
+  acf(na.omit(series), main = "ACF (自己相関)")
+  
+  # (c) PACF
+  pacf(na.omit(series), main = "PACF (偏自己相関)")
+  
+  par(mfrow = c(1, 1))
+  
+  # ADF 検定
+  adf_test(series, type = adf_type)
+  
+  # KPSS 検定
+  kpss_test(series, null = kpss_null)
+}
+
+# ==============================
+# データ準備 (AirPassengers をデータフレーム化)
+# ==============================
+df_ap <- data.frame(y = as.numeric(AirPassengers))
+
+# ==============================
+# 使用例
+# ==============================
+plot_and_stationarity_tests(
+  df_ap$y,
+  title = "元の時系列データ"
+)
